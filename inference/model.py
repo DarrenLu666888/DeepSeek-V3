@@ -731,6 +731,21 @@ class Block(nn.Module):
         x = x + self.ffn(self.ffn_norm(x))
         return x
 
+def sync_print(rank, world_size):
+    for r in range(world_size):
+        if rank == r:
+            gpu_id = rank
+            print(f"GPU {gpu_id}: {torch.cuda.get_device_name(gpu_id)}")
+            total_memory = torch.cuda.get_device_properties(gpu_id).total_memory  # 总显存
+            allocated_memory = torch.cuda.memory_allocated(gpu_id)  # 已使用显存
+            reserved_memory = torch.cuda.memory_reserved(gpu_id)  # 预留显存
+            free_memory = total_memory - allocated_memory  # 空闲显存（大致估算）
+            print(f"总显存: {total_memory / 1024**2:.2f} MB")
+            print(f"已使用显存: {allocated_memory / 1024**2:.2f} MB")
+            print(f"预留显存: {reserved_memory / 1024**2:.2f} MB")
+            print(f"空闲显存（估算）: {free_memory / 1024**2:.2f} MB")
+            print('-' * 90)
+        torch.distributed.barrier()  # 每rank打印后同步
 
 class Transformer(nn.Module):
     """
@@ -754,6 +769,7 @@ class Transformer(nn.Module):
         global world_size, rank
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         rank = dist.get_rank() if dist.is_initialized() else 0
+        print("now rank: ", rank)
         Linear.dtype = torch.float8_e4m3fn if args.dtype == "fp8" else torch.bfloat16
         super().__init__()
         self.max_seq_len = args.max_seq_len
@@ -791,6 +807,8 @@ class Transformer(nn.Module):
             all_logits = [torch.empty_like(logits) for _ in range(world_size)]
             dist.all_gather(all_logits, logits)
             logits = torch.cat(all_logits, dim=-1)
+        # print vram info
+        sync_print(rank, world_size)
         return logits
 
 
