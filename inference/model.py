@@ -798,7 +798,11 @@ if __name__ == "__main__":
     torch.set_default_dtype(torch.bfloat16)
     torch.set_default_device("cuda")
     torch.manual_seed(0)
-    args = ModelArgs()
+    # args = ModelArgs()
+    import json
+    with open('configs/config_16B.json') as f:
+        args = ModelArgs(**json.load(f))
     x = torch.randint(0, args.vocab_size, (2, 128))
     model = Transformer(args)
-    print(model(x).size())
+    # print(model(x).size())
+    # print(model.named_parameters())
